@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Moodwave — Visualizer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080810;
+      --accent: #ff4fd8;
+      --accent2: #7b2fff;
+      --text: #f0eeff;
+      --muted: #6b6880;
+      --bar: #ff4fd8;
+      --glow: rgba(255,79,216,0.35);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+      transition: background 1s ease;
+    }
+
+    /* Animated noise grain overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      background-size: 200px 200px;
+      pointer-events: none;
+      z-index: 100;
+      opacity: 0.4;
+    }
+
+    header {
+      width: 100%;
+      padding: 2.5rem 3rem 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+
+    .logo {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .tagline {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+    }
+
+    /* ── CANVAS ── */
+    .visualizer-wrap {
+      position: relative;
+      width: min(780px, 94vw);
+      margin-top: 3rem;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      border-radius: 1.5rem;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.02);
+      box-shadow: 0 0 80px var(--glow), 0 2px 8px rgba(0,0,0,0.6);
+      transition: box-shadow 0.8s ease;
+    }
+
+    /* overlay label */
+    .vis-label {
+      position: absolute;
+      top: 1.4rem;
+      left: 1.8rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.18em;
+      color: rgba(255,255,255,0.25);
+      text-transform: uppercase;
+    }
+
+    /* ── CONTROLS ── */
+    .controls {
+      width: min(780px, 94vw);
+      margin-top: 2.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.6rem;
+    }
+
+    .section-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.2em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 0.7rem;
+    }
+
+    /* Mood buttons */
+    .moods {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+    }
+
+    .mood-btn {
+      padding: 0.55rem 1.2rem;
+      border-radius: 100px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      font-family: 'Syne', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      letter-spacing: 0.01em;
+    }
+
+    .mood-btn:hover {
+      border-color: var(--accent);
+      color: var(--text);
+      background: rgba(255,79,216,0.08);
+    }
+
+    .mood-btn.active {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 0 20px var(--glow);
+    }
+
+    /* Style buttons */
+    .styles {
+      display: flex;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+    }
+
+    .style-btn {
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      cursor: pointer;
+      transition: all 0.22s ease;
+      letter-spacing: 0.06em;
+    }
+
+    .style-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+    .style-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(255,79,216,0.07);
+    }
+
+    /* Play row */
+    .play-row {
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+    }
+
+    .play-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      font-size: 1.3rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 30px var(--glow);
+      transition: transform 0.15s ease, box-shadow 0.3s ease;
+      flex-shrink: 0;
+    }
+    .play-btn:hover { transform: scale(1.08); }
+    .play-btn:active { transform: scale(0.95); }
+
+    .status {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+    .status span { color: var(--accent); }
+
+    /* Sliders */
+    .sliders {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.2rem 2rem;
+    }
+
+    .slider-group label {
+      display: block;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 3px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.1);
+      outline: none;
+      cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--glow);
+      cursor: pointer;
+    }
+
+    footer {
+      margin-top: auto;
+      padding: 2.5rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.62rem;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      text-align: center;
+    }
+
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 30px var(--glow); }
+      50% { box-shadow: 0 0 55px var(--glow), 0 0 80px var(--glow); }
+      100% { box-shadow: 0 0 30px var(--glow); }
+    }
+    .playing .play-btn { animation: pulse-ring 2s ease infinite; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Moodwave</div>
+  <div class="tagline">// audio visualizer v1.0</div>
+</header>
+
+<div class="visualizer-wrap">
+  <canvas id="canvas" width="1560" height="600"></canvas>
+  <div class="vis-label" id="visLabel">select a mood</div>
+</div>
+
+<div class="controls" id="controls">
+
+  <div>
+    <div class="section-label">Mood</div>
+    <div class="moods" id="moods">
+      <button class="mood-btn" data-mood="euphoric">✦ Euphoric</button>
+      <button class="mood-btn" data-mood="melancholy">◈ Melancholy</button>
+      <button class="mood-btn" data-mood="rage">⚡ Rage</button>
+      <button class="mood-btn" data-mood="dreamy">◎ Dreamy</button>
+      <button class="mood-btn" data-mood="focus">▣ Focus</button>
+      <button class="mood-btn" data-mood="chill">∿ Chill</button>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Visual Style</div>
+    <div class="styles" id="styles">
+      <button class="style-btn active" data-style="bars">BARS</button>
+      <button class="style-btn" data-style="wave">WAVE</button>
+      <button class="style-btn" data-style="circle">CIRCLE</button>
+      <button class="style-btn" data-style="particles">PARTICLES</button>
+    </div>
+  </div>
+
+  <div class="sliders">
+    <div class="slider-group">
+      <label>Speed <span id="speedVal">5</span></label>
+      <input type="range" id="speed" min="1" max="10" value="5" />
+    </div>
+    <div class="slider-group">
+      <label>Intensity <span id="intVal">6</span></label>
+      <input type="range" id="intensity" min="1" max="10" value="6" />
+    </div>
+  </div>
+
+  <div class="play-row" id="playRow">
+    <button class="play-btn" id="playBtn">▶</button>
+    <div class="status">Status: <span id="statusText">IDLE</span></div>
+  </div>
+
+</div>
+
+<footer>moodwave visualizer
+
+<script>
+  // ── MOOD PALETTES ──
+  const MOODS = {
+    euphoric:  { bg:'#07030f', c1:'#ff4fd8', c2:'#ffb347', c3:'#ff006e', glow:'rgba(255,79,216,0.4)', label:'EUPHORIC // 128 BPM' },
+    melancholy:{ bg:'#040810', c1:'#4f8aff', c2:'#b084f5', c3:'#3dd6f5', glow:'rgba(79,138,255,0.35)', label:'MELANCHOLY // 72 BPM' },
+    rage:      { bg:'#0a0200', c1:'#ff2200', c2:'#ff8800', c3:'#ffcc00', glow:'rgba(255,34,0,0.45)', label:'RAGE // 180 BPM' },
+    dreamy:    { bg:'#030810', c1:'#a78bfa', c2:'#67e8f9', c3:'#f9a8d4', glow:'rgba(167,139,250,0.35)', label:'DREAMY // 90 BPM' },
+    focus:     { bg:'#030a06', c1:'#00ff99', c2:'#00ccff', c3:'#aaff66', glow:'rgba(0,255,153,0.3)', label:'FOCUS // 110 BPM' },
+    chill:     { bg:'#050a0f', c1:'#38bdf8', c2:'#818cf8', c3:'#34d399', glow:'rgba(56,189,248,0.3)', label:'CHILL // 80 BPM' },
+  };
+
+  const BPM_MAP = { euphoric:128, melancholy:72, rage:180, dreamy:90, focus:110, chill:80 };
+
+  let currentMood = null;
+  let currentStyle = 'bars';
+  let isPlaying = false;
+  let animId = null;
+  let t = 0;
+  let speedMult = 5;
+  let intensityMult = 6;
+
+  // Fake frequency data simulator
+  let fakeFreq = new Float32Array(128).fill(0);
+  let fakeFreqTarget = new Float32Array(128).fill(0);
+
+  function randomizeTargets() {
+    const bpm = currentMood ? BPM_MAP[currentMood] : 120;
+    const spd = speedMult / 5;
+    for (let i = 0; i < fakeFreqTarget.length; i++) {
+      const bass = i < 10 ? 1.5 : 1;
+      const intns = intensityMult / 6;
+      fakeFreqTarget[i] = Math.random() * bass * intns * (0.4 + 0.6 * Math.sin(i * 0.3 + t * spd));
+    }
+  }
+
+  function smoothFreq() {
+    const rate = 0.12 + speedMult * 0.015;
+    for (let i = 0; i < fakeFreq.length; i++) {
+      fakeFreq[i] += (fakeFreqTarget[i] - fakeFreq[i]) * rate;
+    }
+  }
+
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  function getPalette() {
+    if (!currentMood) return MOODS.euphoric;
+    return MOODS[currentMood];
+  }
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  // ── DRAW STYLES ──
+  function drawBars() {
+    const p = getPalette();
+    ctx.clearRect(0, 0, W, H);
+
+    const n = fakeFreq.length;
+    const barW = (W - n * 3) / n;
+    const midY = H / 2;
+
+    for (let i = 0; i < n; i++) {
+      const v = fakeFreq[i];
+      const bh = v * H * 0.42 * (intensityMult / 6);
+      const x = i * (barW + 3) + 1.5;
+
+      const grad = ctx.createLinearGradient(0, midY - bh, 0, midY + bh);
+      grad.addColorStop(0, p.c1);
+      grad.addColorStop(0.5, p.c2);
+      grad.addColorStop(1, p.c3);
+
+      ctx.fillStyle = grad;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.roundRect(x, midY - bh, barW, bh * 2, 4);
+      ctx.fill();
+
+      // glow bar
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = p.c1;
+      ctx.beginPath();
+      ctx.roundRect(x - 2, midY - bh - 4, barW + 4, bh * 2 + 8, 6);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawWave() {
+    const p = getPalette();
+    ctx.clearRect(0, 0, W, H);
+
+    const spd = speedMult / 5;
+    const intns = intensityMult / 6;
+
+    for (let layer = 0; layer < 3; layer++) {
+      ctx.beginPath();
+      const col = [p.c1, p.c2, p.c3][layer];
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 3 - layer * 0.5;
+      ctx.globalAlpha = 0.7 - layer * 0.15;
+
+      for (let x = 0; x <= W; x += 3) {
+        const nx = x / W;
+        let y = H / 2;
+        for (let i = 0; i < fakeFreq.length; i += 4) {
+          const freq = (i + 1) * 0.8 + layer;
+          y += fakeFreq[i] * Math.sin(nx * freq * Math.PI * 2 + t * spd + layer * 1.2) * 100 * intns;
+        }
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawCircle() {
+    const p = getPalette();
+    ctx.clearRect(0, 0, W, H);
+    const cx = W / 2, cy = H / 2;
+    const r = 150;
+    const n = fakeFreq.length;
+    const intns = intensityMult / 6;
+    const spd = speedMult / 5;
+
+    for (let k = 0; k < 3; k++) {
+      ctx.beginPath();
+      const col = [p.c1, p.c2, p.c3][k];
+      for (let i = 0; i < n; i++) {
+        const angle = (i / n) * Math.PI * 2 - Math.PI / 2 + t * spd * 0.3 * (k % 2 === 0 ? 1 : -1);
+        const amp = fakeFreq[i] * 160 * intns;
+        const rr = r + k * 28 + amp;
+        const x = cx + Math.cos(angle) * rr;
+        const y = cy + Math.sin(angle) * rr;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2.5 - k * 0.4;
+      ctx.globalAlpha = 0.75 - k * 0.15;
+      ctx.stroke();
+
+      // inner glow fill
+      ctx.fillStyle = col;
+      ctx.globalAlpha = 0.04;
+      ctx.fill();
+    }
+
+    // center dot
+    ctx.globalAlpha = 1;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 40);
+    grad.addColorStop(0, p.c1);
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalAlpha = 1;
+  }
+
+  // Particle system
+  let particles = [];
+  function spawnParticles() {
+    const p = getPalette();
+    const cols = [p.c1, p.c2, p.c3];
+    for (let i = 0; i < fakeFreq.length; i += 4) {
+      if (fakeFreq[i] > 0.4 && Math.random() < 0.3) {
+        particles.push({
+          x: Math.random() * W,
+          y: H / 2 + (Math.random() - 0.5) * H * 0.6,
+          vx: (Math.random() - 0.5) * 4 * speedMult / 5,
+          vy: -(Math.random() * 3 + 1) * fakeFreq[i] * intensityMult / 3,
+          r: Math.random() * 4 + 2,
+          alpha: 0.9,
+          col: cols[Math.floor(Math.random() * 3)],
+        });
+      }
+    }
+    // limit
+    if (particles.length > 300) particles = particles.slice(-300);
+  }
+
+  function drawParticles() {
+    const p = getPalette();
+    ctx.clearRect(0, 0, W, H);
+    spawnParticles();
+
+    particles = particles.filter(pt => pt.alpha > 0.02);
+    for (const pt of particles) {
+      pt.x += pt.vx;
+      pt.y += pt.vy;
+      pt.vy += 0.05; // gravity
+      pt.alpha *= 0.96;
+      pt.r *= 0.995;
+
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2);
+      ctx.fillStyle = pt.col;
+      ctx.globalAlpha = pt.alpha;
+      ctx.fill();
+    }
+
+    // base wave underneath
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.strokeStyle = p.c1;
+    ctx.lineWidth = 2;
+    const spd = speedMult / 5;
+    const intns = intensityMult / 6;
+    for (let x = 0; x <= W; x += 4) {
+      const nx = x / W;
+      let y = H / 2;
+      for (let i = 0; i < fakeFreq.length; i += 6) {
+        y += fakeFreq[i] * Math.sin(nx * (i + 1) * Math.PI * 2 + t * spd) * 60 * intns;
+      }
+      if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // ── MAIN LOOP ──
+  let lastRandom = 0;
+  function loop(ts) {
+    if (!isPlaying) return;
+    animId = requestAnimationFrame(loop);
+    t += 0.04 * (speedMult / 5);
+
+    if (ts - lastRandom > 80) {
+      randomizeTargets();
+      lastRandom = ts;
+    }
+    smoothFreq();
+
+    if (currentStyle === 'bars') drawBars();
+    else if (currentStyle === 'wave') drawWave();
+    else if (currentStyle === 'circle') drawCircle();
+    else if (currentStyle === 'particles') drawParticles();
+  }
+
+  function applyMoodTheme(moodKey) {
+    const p = MOODS[moodKey];
+    document.documentElement.style.setProperty('--bg', p.bg);
+    document.documentElement.style.setProperty('--accent', p.c1);
+    document.documentElement.style.setProperty('--accent2', p.c2);
+    document.documentElement.style.setProperty('--glow', p.glow);
+    document.body.style.background = p.bg;
+    document.getElementById('visLabel').textContent = p.label;
+    canvas.style.boxShadow = `0 0 80px ${p.glow}, 0 2px 8px rgba(0,0,0,0.6)`;
+  }
+
+  // ── UI ──
+  document.querySelectorAll('.mood-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentMood = btn.dataset.mood;
+      applyMoodTheme(currentMood);
+      particles = [];
+    });
+  });
+
+  document.querySelectorAll('.style-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentStyle = btn.dataset.style;
+      particles = [];
+    });
+  });
+
+  const speedSlider = document.getElementById('speed');
+  const speedVal = document.getElementById('speedVal');
+  speedSlider.addEventListener('input', () => {
+    speedMult = +speedSlider.value;
+    speedVal.textContent = speedMult;
+  });
+
+  const intSlider = document.getElementById('intensity');
+  const intVal = document.getElementById('intVal');
+  intSlider.addEventListener('input', () => {
+    intensityMult = +intSlider.value;
+    intVal.textContent = intensityMult;
+  });
+
+  const playBtn = document.getElementById('playBtn');
+  const statusText = document.getElementById('statusText');
+  const playRow = document.getElementById('playRow');
+
+  playBtn.addEventListener('click', () => {
+    if (!currentMood) {
+      // flash moods
+      document.getElementById('moods').style.outline = '1px solid rgba(255,79,216,0.6)';
+      setTimeout(() => document.getElementById('moods').style.outline = '', 600);
+      return;
+    }
+    isPlaying = !isPlaying;
+    if (isPlaying) {
+      playBtn.textContent = '⏸';
+      statusText.textContent = 'PLAYING';
+      playRow.classList.add('playing');
+      particles = [];
+      requestAnimationFrame(loop);
+    } else {
+      playBtn.textContent = '▶';
+      statusText.textContent = 'PAUSED';
+      playRow.classList.remove('playing');
+      cancelAnimationFrame(animId);
+    }
+  });
+
+  // draw idle frame
+  (function idleFrame() {
+    ctx.clearRect(0, 0, W, H);
+    const p = MOODS.euphoric;
+    ctx.globalAlpha = 0.15;
+    ctx.strokeStyle = p.c1;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let x = 0; x <= W; x += 4) {
+      const y = H / 2 + Math.sin(x * 0.015) * 30 + Math.sin(x * 0.04) * 15;
+      if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  })();
+</script>
+</body>
+</html>
